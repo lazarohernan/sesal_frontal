@@ -85,7 +85,8 @@ const calcularOpacidadBarra = (index: number) => {
               :class="`bg-${calcularColorBarra()}`"
               :style="{
                 height: `${calcularAlturaBarra(dato.valor)}%`,
-                opacity: calcularOpacidadBarra(index)
+                opacity: calcularOpacidadBarra(index),
+                '--altura-final': `${calcularAlturaBarra(dato.valor)}%`
               }"
             >
               <div class="barra-animacion"></div>
@@ -182,18 +183,18 @@ const calcularOpacidadBarra = (index: number) => {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  gap: clamp(1rem, 3vw, 3rem);
+  gap: clamp(0.75rem, 2vw, 2rem);
   height: 100%;
   min-width: max-content;
-  padding: 2rem 1rem 3rem;
+  padding: 1.5rem 1rem 2.5rem;
 }
 
 .barra-contenedor {
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-width: 80px;
-  max-width: 200px;
+  min-width: 60px;
+  max-width: 150px;
   width: 100%;
   flex: 1;
   height: 100%;
@@ -226,9 +227,10 @@ const calcularOpacidadBarra = (index: number) => {
   border-radius: 6px 6px 0 0;
   position: relative;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  animation: barraCrecer 0.6s ease-out;
+  animation: barraCrecer 0.8s ease-out forwards;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   cursor: pointer;
+  transform-origin: bottom;
 }
 
 .barra:hover {
@@ -251,12 +253,12 @@ const calcularOpacidadBarra = (index: number) => {
 }
 
 @keyframes barraCrecer {
-  from {
-    height: 0;
+  0% {
+    transform: scaleY(0);
     opacity: 0;
   }
-  to {
-    height: 100%;
+  100% {
+    transform: scaleY(1);
     opacity: 1;
   }
 }

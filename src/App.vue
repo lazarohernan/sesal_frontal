@@ -128,7 +128,7 @@ const pestañaActiva = ref<string>('inicio')
 
 const tabs = [
   { id: 'inicio', label: 'Inicio' },
-  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'dashboard', label: 'Mapa' },
   { id: 'indicadores', label: 'Indicadores' },
   { id: 'reportes', label: 'Reportes' }
 ]
@@ -375,7 +375,7 @@ onBeforeUnmount(() => {
           <ImageBanner />
           <div class="mt-8 text-center">
             <p class="text-lg text-text-secondary dark:text-text-muted max-w-4xl mx-auto leading-relaxed">
-              La Secretaría de Salud (SESAL) de Honduras impulsa este sistema de información para consolidar y analizar la base histórica de datos de salud pública del país. La plataforma integra millones de registros provenientes de los diferentes subsistemas de salud en todo el país, permitiendo generar visualizaciones, reportes y análisis dinámicos que fortalecen la gestión basada en evidencia y la toma de decisiones estratégicas.
+              La Secretaría de Salud (SESAL) de Honduras impulsa este sistema de información para consolidar y analizar la base histórica de datos de salud pública del país. La plataforma integra millones de registros provenientes de la producción ambulatoria de los establecimientos de salud en todo el país, permitiendo generar visualizaciones, reportes y análisis dinámicos que fortalecen la gestión basada en evidencia y la toma de decisiones estratégicas.
             </p>
           </div>
 

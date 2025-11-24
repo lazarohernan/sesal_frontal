@@ -420,7 +420,12 @@ const paginasVisibles = computed(() => {
   return Array.from({ length: fin - inicio + 1 }, (_, i) => inicio + i);
 });
 
-// Resetear paginación cuando cambien los datos
+// Resetear paginación cuando cambien los datos o el resultado completo
+watch(() => props.resultado, () => {
+  paginaActual.value = 1;
+}, { deep: true });
+
+// También resetear cuando cambien los datos directamente
 watch(() => datos.value, () => {
   paginaActual.value = 1;
 });

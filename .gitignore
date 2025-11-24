@@ -7,10 +7,20 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies
 node_modules
+
+# Build outputs
 dist
 dist-ssr
 *.local
+
+# Environment variables
+.env
+.env.local
+.env.production
+.env.development
+.env.test
 
 # Editor directories and files
 .vscode/*
@@ -22,3 +32,21 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Demo and test files
+demo-server.js
+demo.html
+test-widget.html
+
+# Documentation files (optional)
+MAPA_IMPLEMENTACION_VISUAL.md
+WIDGET_README.md
+
+# Deployment configs with sensitive data
+vercel.json
+
+# Unused assets
+src/assets/vue.svg
+
+# OS files
+Thumbs.db

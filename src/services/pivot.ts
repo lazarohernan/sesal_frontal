@@ -45,11 +45,15 @@ export const obtenerValoresDimensionApi = async (
   dimensionId: string,
   busqueda?: string,
   limite = 200,
-  baseUrl?: string
+  baseUrl?: string,
+  filtroRegion?: string,
+  filtroMunicipio?: string
 ) => {
   const parametros = new URLSearchParams();
   if (busqueda) parametros.set("busqueda", busqueda);
   if (limite) parametros.set("limite", String(limite));
+  if (filtroRegion) parametros.set("filtroRegion", filtroRegion);
+  if (filtroMunicipio) parametros.set("filtroMunicipio", filtroMunicipio);
 
   const respuesta = await fetch(
     construirUrl(`/api/pivot/dimensiones/${dimensionId}/valores?${parametros.toString()}`, baseUrl)

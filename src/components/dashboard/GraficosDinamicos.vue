@@ -118,20 +118,21 @@ const opcionesAnios = computed(() =>
 )
 
 // Opciones para el selector "Hasta" - solo años anteriores al seleccionado en "Desde"
-const opcionesAniosFin = computed(() => {
-  if (anioInicio.value === null) {
-    // Si no hay año de inicio seleccionado, mostrar todos
-    return opcionesAnios.value
-  }
-  
-  // Filtrar para mostrar solo años menores que el año de inicio (años anteriores)
-  return aniosDisponibles.value
-    .filter(anio => anio !== null && anio < anioInicio.value!)
-    .map(anio => ({
-      valor: anio,
-      etiqueta: String(anio)
-    }))
-})
+// Comentado temporalmente ya que el selector está deshabilitado en el template
+// const opcionesAniosFin = computed(() => {
+//   if (anioInicio.value === null) {
+//     // Si no hay año de inicio seleccionado, mostrar todos
+//     return opcionesAnios.value
+//   }
+//   
+//   // Filtrar para mostrar solo años menores que el año de inicio (años anteriores)
+//   return aniosDisponibles.value
+//     .filter(anio => anio !== null && anio < anioInicio.value!)
+//     .map(anio => ({
+//       valor: anio,
+//       etiqueta: String(anio)
+//     }))
+// })
 
 const opcionesRegiones = computed(() =>
   [{ valor: '', etiqueta: 'Todas las regiones' }, ...regionesDisponibles.value]
@@ -229,6 +230,17 @@ const ejecutarConsultaIndicadores = async () => {
   }
   
   await ejecutarConsulta(payload)
+}
+
+// Función para limpiar/resetear todos los filtros
+const limpiarFiltros = () => {
+  anioInicio.value = null
+  anioFin.value = null
+  regionSeleccionada.value = ''
+  conceptosSeleccionados.value = []
+  dropdownConceptosAbierto.value = false
+  // Ejecutar consulta con filtros limpios
+  void ejecutarConsultaIndicadores()
 }
 
 // Preparar datos para el gráfico de barras
@@ -377,14 +389,15 @@ watch([anioInicio, anioFin, regionSeleccionada, conceptosSeleccionados], () => {
       <!-- Panel de filtros integrado -->
       <div class="bg-white/50 dark:bg-slate-800/30 border-b border-border dark:border-border-dark p-6">
         <!-- Filtros en línea compactos -->
-        <div class="flex flex-wrap items-center gap-3">
-          <!-- Filtro de Año (Desde - Hasta) -->
+        <div class="flex flex-wrap items-center gap-3 justify-between">
+          <div class="flex flex-wrap items-center gap-3">
+            <!-- Filtro de Año (Desde - Hasta) -->
           <div class="flex items-center gap-2 min-w-0">
             <label class="flex items-center gap-1.5 text-sm font-medium text-text-secondary dark:text-text-muted whitespace-nowrap">
               <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
-              <span>Desde:</span>
+              <span>Elija el año:</span>
             </label>
             <div class="relative min-w-[120px]">
               <CompactSelect
@@ -395,7 +408,8 @@ watch([anioInicio, anioFin, regionSeleccionada, conceptosSeleccionados], () => {
                 placeholder="Año"
               />
             </div>
-            <span class="text-sm text-text-secondary dark:text-text-muted">hasta</span>
+            <!-- Selector de año "Hasta" oculto temporalmente -->
+            <!-- <span class="text-sm text-text-secondary dark:text-text-muted">hasta</span>
             <div class="relative min-w-[120px]">
               <CompactSelect
                 v-model="anioFin"
@@ -404,7 +418,7 @@ watch([anioInicio, anioFin, regionSeleccionada, conceptosSeleccionados], () => {
                 :loading="cargandoAnios"
                 placeholder="Año (opcional)"
               />
-            </div>
+            </div> -->
           </div>
 
           <!-- Filtro de Región -->
@@ -482,6 +496,21 @@ watch([anioInicio, anioFin, regionSeleccionada, conceptosSeleccionados], () => {
               </div>
             </div>
           </div>
+          </div>
+
+          <!-- Botón de limpiar filtros -->
+          <button
+            type="button"
+            @click="limpiarFiltros"
+            class="flex items-center gap-2 px-4 py-2 rounded-lg border-2 border-slate-300 bg-white dark:border-slate-600 dark:bg-slate-800 text-sm font-medium text-slate-700 dark:text-slate-300 shadow-sm transition-all duration-200 hover:border-red-400 hover:bg-red-50 hover:text-red-700 dark:hover:border-red-500 dark:hover:bg-red-900/20 dark:hover:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+            :class="{ 'opacity-50 cursor-not-allowed': anioInicio === null && regionSeleccionada === '' && conceptosSeleccionados.length === 0 }"
+            :disabled="anioInicio === null && regionSeleccionada === '' && conceptosSeleccionados.length === 0"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            <span>Limpiar filtros</span>
+          </button>
         </div>
       </div>
 
@@ -586,7 +615,7 @@ watch([anioInicio, anioFin, regionSeleccionada, conceptosSeleccionados], () => {
           :titulo="tituloDinamico"
           :subtitulo="`${descripcionFiltros}`"
           color-barra="#0066cc"
-          :altura="1200"
+          :altura="500"
         />
         <GraficoIconos
           v-else

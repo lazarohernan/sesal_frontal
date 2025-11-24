@@ -10,6 +10,8 @@ class BISesalWidget extends HTMLElement {
   constructor() {
     super()
     this.attachShadow({ mode: 'open' })
+    this._resizeObserver = null
+    this._autoResize = false
   }
 
   static get observedAttributes() {
@@ -18,14 +20,23 @@ class BISesalWidget extends HTMLElement {
 
   connectedCallback() {
     // Config inicial desde atributos HTML
+    const rawHeightAttr = this.getAttribute('height')
+    const hasHeightAttr = typeof rawHeightAttr === 'string' && rawHeightAttr.trim().length > 0
+    const normalizedHeight = hasHeightAttr ? rawHeightAttr.trim() : ''
+    const autoHeight =
+      !hasHeightAttr || normalizedHeight.toLowerCase() === 'auto'
+    const initialHeight = autoHeight ? 'auto' : normalizedHeight
+
     const initial = {
       anio: Number.parseInt(this.getAttribute('anio') || '2024', 10),
       departamento: this.getAttribute('departamento') || '',
       theme: this.getAttribute('theme') || 'light',
-      height: this.getAttribute('height') || '600px',
+      height: initialHeight,
       width: this.getAttribute('width') || '100%',
       apiUrl: this.getAttribute('api-url') || ''
     }
+
+    this._autoResize = autoHeight
 
     // Crear contenedor y estilos dentro del Shadow DOM
     const hostStyle = document.createElement('style')
@@ -66,6 +77,10 @@ class BISesalWidget extends HTMLElement {
     app.mount(mountPoint)
     this._app = app
     this._mountPoint = mountPoint
+
+    if (this._autoResize) {
+      this._setupAutoResize()
+    }
   }
 
   // Método para actualizar configuración dinámicamente
@@ -73,6 +88,10 @@ class BISesalWidget extends HTMLElement {
     if (!this._config) return
     const entries = Object.entries(config || {})
     for (const [k, v] of entries) {
+      if (k === 'height') {
+        this._applyHeightValue(v)
+        continue
+      }
       if (k in this._config) {
         // eslint-disable-next-line no-param-reassign
         this._config[k] = k === 'anio' ? Number(v) : v
@@ -80,7 +99,6 @@ class BISesalWidget extends HTMLElement {
     }
     // Reflejar tamaño en el host si cambia
     if (config.width) this.style.width = String(config.width)
-    if (config.height) this.style.height = String(config.height)
 
     this.dispatchEvent(
       new CustomEvent('config-changed', { detail: { ...this._config }, bubbles: true })
@@ -101,6 +119,7 @@ class BISesalWidget extends HTMLElement {
       this._app = null
       this._mountPoint = null
       this._config = null
+      this._cancelAutoResize()
     }
   }
 
@@ -117,8 +136,7 @@ class BISesalWidget extends HTMLElement {
         this._config.theme = newVal || 'light'
         break
       case 'height':
-        this._config.height = newVal || '600px'
-        this.style.height = this._config.height
+        this._applyHeightValue(newVal)
         break
       case 'width':
         this._config.width = newVal || '100%'
@@ -130,6 +148,53 @@ class BISesalWidget extends HTMLElement {
       default:
         break
     }
+  }
+
+  _applyHeightValue(value) {
+    const rawValue = typeof value === 'string' ? value.trim() : String(value ?? '')
+    const auto = !rawValue || rawValue.toLowerCase() === 'auto'
+    this._autoResize = auto
+    if (auto) {
+      this._cancelAutoResize()
+      this.style.height = 'auto'
+      if (this._config) {
+        this._config.height = 'auto'
+      }
+      this._setupAutoResize()
+      return
+    }
+    this._cancelAutoResize()
+    this.style.height = rawValue
+    if (this._config) {
+      this._config.height = rawValue
+    }
+  }
+
+  _setupAutoResize() {
+    if (!this._autoResize || !this._mountPoint) return
+    if (typeof ResizeObserver === 'undefined') return
+    if (this._resizeObserver) {
+      this._resizeObserver.disconnect()
+    }
+    this._resizeObserver = new ResizeObserver(() => this._applyAutoHeight())
+    this._resizeObserver.observe(this._mountPoint)
+    this._applyAutoHeight()
+  }
+
+  _cancelAutoResize() {
+    if (this._resizeObserver) {
+      this._resizeObserver.disconnect()
+      this._resizeObserver = null
+    }
+  }
+
+  _applyAutoHeight() {
+    if (!this._autoResize || !this._mountPoint) return
+    const height = Math.max(
+      Math.ceil(this._mountPoint.scrollHeight),
+      Math.ceil(this._mountPoint.offsetHeight)
+    )
+    this.style.height = `${height}px`
   }
 }
 

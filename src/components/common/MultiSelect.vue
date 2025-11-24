@@ -1,5 +1,5 @@
 <template>
-  <div class="relative inline-block min-w-[200px]" ref="containerRef">
+  <div class="relative inline-block min-w-[300px]" ref="containerRef">
     <label v-if="label" :for="idInterno" class="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
       {{ label }}
     </label>
@@ -28,7 +28,7 @@
     <!-- Dropdown -->
     <div
       v-if="abierto"
-      class="absolute z-50 mt-1 w-full rounded-lg border border-slate-200 bg-white dark:border-slate-600 dark:bg-slate-800 shadow-lg"
+      class="absolute z-50 mt-1 w-full min-w-[300px] rounded-lg border border-slate-200 bg-white dark:border-slate-600 dark:bg-slate-800 shadow-lg"
     >
       <!-- Buscador -->
       <div class="border-b border-slate-200 dark:border-slate-700 p-2">
@@ -42,7 +42,7 @@
           <input
             v-model="termino"
             type="search"
-            class="w-full border-0 bg-transparent p-0 text-sm text-slate-700 dark:text-slate-300 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-0"
+            class="w-full border-0 bg-transparent p-0 text-sm text-slate-700 dark:text-slate-300 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-0 focus:outline-none"
             :placeholder="placeholder"
           />
         </div>
@@ -58,7 +58,7 @@
           :class="seleccionadosSet.has(String(opcion.valor)) ? 'bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400' : 'text-slate-700 dark:text-slate-300'"
           @click="toggle(opcion.valor)"
         >
-          <span class="truncate">{{ opcion.etiqueta }}</span>
+          <span class="break-words pr-2">{{ opcion.etiqueta }}</span>
           <svg v-if="seleccionadosSet.has(String(opcion.valor))" class="h-4 w-4" viewBox="0 0 24 24">
             <path d="M9 16.17 4.83 12l-1.42 1.41L9 19l12-12-1.41-1.41z" fill="currentColor" />
           </svg>
@@ -100,10 +100,12 @@ const props = withDefaults(
     options: PivotFilterOption[];
     modelValue: Array<string | number>;
     optionLabelGetter?: (valor: string | number) => string;
+    field?: string; // Campo para identificar el tipo de dimensión
   }>(),
   {
     placeholder: "Buscar opción",
-    optionLabelGetter: undefined
+    optionLabelGetter: undefined,
+    field: undefined
   }
 );
 
@@ -131,6 +133,15 @@ watch(
 const opcionesFiltradas = computed(() => {
   const texto = termino.value.trim().toLowerCase();
   if (!texto) return opciones.originales;
+  
+  // Para ESTABLECIMIENTO, si la búsqueda es solo números, buscar coincidencia exacta en código
+  if (props.field === 'ESTABLECIMIENTO' && /^\d+$/.test(termino.value.trim())) {
+    return opciones.originales.filter((opcion) =>
+      String(opcion.valor).toLowerCase() === texto || opcion.etiqueta.toLowerCase().includes(texto)
+    );
+  }
+  
+  // Búsqueda normal (parcial en ambos campos)
   return opciones.originales.filter((opcion) =>
     opcion.etiqueta.toLowerCase().includes(texto) || String(opcion.valor).toLowerCase().includes(texto)
   );

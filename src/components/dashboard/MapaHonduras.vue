@@ -61,6 +61,7 @@ interface FeatureDepartamento {
 
 const departamentoSeleccionado = ref<DepartamentoSeleccionado | null>(null)
 const departamentoIdSeleccionado = ref<number | null>(null)
+const regionSeleccionada = ref<number | null>(null) // Para Cortés: región 5 o 20
 let mapa: maplibregl.Map | null = null
 const esModoOscuro = ref<boolean>(false)
 let observer: MutationObserver | null = null
@@ -70,6 +71,7 @@ let estadoOriginalMapa: { center: [number, number]; zoom: number; pitch: number;
 
 // Función para volver a la vista general de Honduras
 const volverVistaGeneral = () => {
+  regionSeleccionada.value = null // Resetear región seleccionada
   if (mapa && estadoOriginalMapa) {
     // Usar easeTo para una transición suave y controlada
     // Resetear padding a 0 para volver a la vista original sin desplazamientos
@@ -86,9 +88,11 @@ const volverVistaGeneral = () => {
     // Limpiar selección de departamento
     departamentoSeleccionado.value = null
     departamentoIdSeleccionado.value = null
+    regionSeleccionada.value = null
     datosMunicipales.value = null
     actualizarColores()
     actualizarEtiquetas()
+    actualizarPuntosRegiones() // Esto restaurará los filtros correctamente
   }
 }
 
@@ -346,6 +350,26 @@ const calcularCentroide = (coordinates: number[][]): [number, number] => {
   return [centroidX, centroidY]
 }
 
+// Coordenadas aproximadas para las regiones de Cortés
+// Calculadas basándose en el GeoJSON del departamento de Cortés
+// Región 5 (Cortés): zona este/sur de Cortés
+// Posicionado más abajo y a la izquierda (oeste) dentro del departamento
+const COORDENADAS_REGION_5 = [-88.0, 15.20] as [number, number]
+// Región 20 (Metropolitana de San Pedro Sula): zona oeste de Cortés
+// Coordenadas de San Pedro Sula: 15.50585° N, 88.02588° O
+// Posicionado en la parte oeste del departamento (cerca de San Pedro Sula)
+const COORDENADAS_REGION_20 = [-88.03, 15.50] as [number, number]
+
+// Coordenadas aproximadas para las regiones de Francisco Morazán
+// Calculadas basándose en el GeoJSON del departamento de Francisco Morazán
+// Región 8 (Departamental de Francisco Morazán): zona este/norte del departamento
+// Posicionado más a la izquierda (oeste) dentro del departamento
+const COORDENADAS_REGION_8_FMO = [-87.0, 14.5] as [number, number]
+// Región 19 (Metropolitana del Distrito Central): centro de Tegucigalpa
+// Coordenadas de Tegucigalpa: 14.1° N, 87.22° O
+// Posicionado en el centro del departamento (cerca de Tegucigalpa)
+const COORDENADAS_REGION_19 = [-87.22, 14.1] as [number, number]
+
 // Crear GeoJSON de puntos centrales para cada departamento
 const construirCentroidesDepartamentos = (): GeoJSONCollection | null => {
   if (!geojsonBase.value) return null
@@ -354,6 +378,8 @@ const construirCentroidesDepartamentos = (): GeoJSONCollection | null => {
     const propiedades = feature.properties ?? {}
     let centroide: [number, number] = [-86.25, 14.6]
     
+    // Para Cortés (5), usar el centroide normal del departamento
+    // Los puntos de región se manejarán por separado
     if (feature.geometry) {
       if (feature.geometry.type === 'Polygon') {
         // Para Polygon simple, usar el primer anillo (exterior)
@@ -398,6 +424,76 @@ const construirCentroidesDepartamentos = (): GeoJSONCollection | null => {
   } as GeoJSONCollection
 }
 
+// Crear GeoJSON de puntos para las regiones de Cortés
+const construirPuntosRegionesCortes = (): GeoJSONCollection => {
+  return {
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        geometry: {
+          type: 'Point',
+          coordinates: COORDENADAS_REGION_5
+        },
+        properties: {
+          departamentoId: 5,
+          regionId: 5,
+          nombre: 'Cortés',
+          tipo: 'region'
+        }
+      },
+      {
+        type: 'Feature',
+        geometry: {
+          type: 'Point',
+          coordinates: COORDENADAS_REGION_20
+        },
+        properties: {
+          departamentoId: 5,
+          regionId: 20,
+          nombre: 'Metropolitana de San Pedro Sula',
+          tipo: 'region'
+        }
+      }
+    ]
+  } as GeoJSONCollection
+}
+
+// Crear GeoJSON de puntos para las regiones de Francisco Morazán
+const construirPuntosRegionesFMO = (): GeoJSONCollection => {
+  return {
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        geometry: {
+          type: 'Point',
+          coordinates: COORDENADAS_REGION_8_FMO
+        },
+        properties: {
+          departamentoId: 8,
+          regionId: 8,
+          nombre: 'Francisco Morazán',
+          tipo: 'region'
+        }
+      },
+      {
+        type: 'Feature',
+        geometry: {
+          type: 'Point',
+          coordinates: COORDENADAS_REGION_19
+        },
+        properties: {
+          departamentoId: 8,
+          regionId: 19,
+          nombre: 'Metropolitana del Distrito Central',
+          tipo: 'region'
+        }
+      }
+    ]
+  } as GeoJSONCollection
+}
+
 const actualizarFuenteGeografica = () => {
   if (!mapa || !geojsonBase.value) return
   const dataActualizada = construirGeojsonConTotales()
@@ -408,7 +504,83 @@ const actualizarFuenteGeografica = () => {
   }
 }
 
-const cargarDatosDepartamento = async (departamentoId: number) => {
+const actualizarPuntosRegiones = () => {
+  if (!mapa) return
+  const fuenteCortes = mapa.getSource('regiones-cortes') as maplibregl.GeoJSONSource | undefined
+  const fuenteFMO = mapa.getSource('regiones-fmo') as maplibregl.GeoJSONSource | undefined
+  
+  // Mostrar puntos solo si el departamento correspondiente está seleccionado
+  const mostrarPuntosCortes = departamentoIdSeleccionado.value === 5
+  const mostrarPuntosFMO = departamentoIdSeleccionado.value === 8
+  
+  const visibilidadCortes = mostrarPuntosCortes ? 'visible' : 'none'
+  const visibilidadFMO = mostrarPuntosFMO ? 'visible' : 'none'
+  
+  // Actualizar visibilidad de puntos de Cortés
+  if (fuenteCortes) {
+    mapa.setLayoutProperty('regiones-cortes-puntos', 'visibility', visibilidadCortes)
+    mapa.setLayoutProperty('regiones-cortes-etiquetas', 'visibility', visibilidadCortes)
+  }
+  
+  // Actualizar visibilidad de puntos de Francisco Morazán
+  if (fuenteFMO) {
+    mapa.setLayoutProperty('regiones-fmo-puntos', 'visibility', visibilidadFMO)
+    mapa.setLayoutProperty('regiones-fmo-etiquetas', 'visibility', visibilidadFMO)
+  }
+  
+  // Ocultar el punto general del departamento cuando se muestran los puntos de región
+  const departamentosConPuntosRegionales = []
+  if (mostrarPuntosCortes) departamentosConPuntosRegionales.push(5)
+  if (mostrarPuntosFMO) departamentosConPuntosRegionales.push(8)
+  
+  if (departamentosConPuntosRegionales.length > 0) {
+    // Filtrar para ocultar los puntos de departamentos con puntos regionales
+    mapa.setFilter('departamentos-puntos', [
+      '!',
+      ['in', ['get', 'departamentoId'], ['literal', departamentosConPuntosRegionales]]
+    ])
+    // Ocultar también la etiqueta grande del departamento cuando se muestran puntos de región
+    mapa.setFilter('departamentos-etiquetas', [
+      '!',
+      ['in', ['get', 'departamentoId'], ['literal', departamentosConPuntosRegionales]]
+    ])
+  } else {
+    // Mostrar todos los puntos cuando no hay selección
+    mapa.setFilter('departamentos-puntos', ['has', 'departamentoId'])
+    // Actualizar etiquetas según el departamento seleccionado
+    actualizarEtiquetas()
+  }
+  
+  // Actualizar color de los puntos según la región seleccionada para Cortés
+  if (mostrarPuntosCortes && regionSeleccionada.value) {
+    mapa.setPaintProperty('regiones-cortes-puntos', 'circle-color', [
+      'case',
+      ['==', ['get', 'regionId'], regionSeleccionada.value],
+      '#3b82f6', // Azul para el seleccionado
+      '#f59e0b' // Naranja para los demás
+    ])
+    mapa.setFilter('regiones-cortes-puntos', ['has', 'regionId'])
+  } else if (mostrarPuntosCortes) {
+    mapa.setPaintProperty('regiones-cortes-puntos', 'circle-color', '#f59e0b')
+    mapa.setFilter('regiones-cortes-puntos', ['has', 'regionId'])
+  }
+  
+  // Actualizar color de los puntos según la región seleccionada para Francisco Morazán
+  if (mostrarPuntosFMO && regionSeleccionada.value) {
+    mapa.setPaintProperty('regiones-fmo-puntos', 'circle-color', [
+      'case',
+      ['==', ['get', 'regionId'], regionSeleccionada.value],
+      '#3b82f6', // Azul para el seleccionado
+      '#f59e0b' // Naranja para los demás
+    ])
+    mapa.setFilter('regiones-fmo-puntos', ['has', 'regionId'])
+  } else if (mostrarPuntosFMO) {
+    mapa.setPaintProperty('regiones-fmo-puntos', 'circle-color', '#f59e0b')
+    mapa.setFilter('regiones-fmo-puntos', ['has', 'regionId'])
+  }
+}
+
+const cargarDatosDepartamento = async (departamentoId: number, regionId?: number) => {
   try {
     cargandoTotales.value = true
     const params = new URLSearchParams({
@@ -416,6 +588,9 @@ const cargarDatosDepartamento = async (departamentoId: number) => {
       departamentoId: String(departamentoId),
       limite: '100'
     })
+    if (regionId !== undefined && regionId !== null) {
+      params.append('regionId', String(regionId))
+    }
     const respuesta = await fetchApiConFallback('/api/reportes/indicadores-municipales', params)
     const resultado = await respuesta.json()
     const totales = (resultado.datos ?? {}) as Partial<TotalesDepartamento>
@@ -525,6 +700,14 @@ const construirMapa = async () => {
         'departamentos-centroides': {
           type: 'geojson',
           data: construirCentroidesDepartamentos() ?? { type: 'FeatureCollection', features: [] }
+        },
+        'regiones-cortes': {
+          type: 'geojson',
+          data: construirPuntosRegionesCortes()
+        },
+        'regiones-fmo': {
+          type: 'geojson',
+          data: construirPuntosRegionesFMO()
         }
       },
       layers: [
@@ -608,6 +791,70 @@ const construirMapa = async () => {
             'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
             'text-size': 14,
             'text-offset': [0, 1.5],
+            'text-anchor': 'top'
+          },
+          paint: {
+            'text-color': '#1f2937',
+            'text-halo-color': '#ffffff',
+            'text-halo-width': 2
+          }
+        },
+        {
+          id: 'regiones-cortes-puntos',
+          type: 'circle',
+          source: 'regiones-cortes',
+          layout: {
+            visibility: 'none' // Oculto por defecto, se muestra solo cuando Cortés está seleccionado
+          },
+          paint: {
+            'circle-radius': 8,
+            'circle-color': '#f59e0b', // Color por defecto (naranja)
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#ffffff'
+          }
+        },
+        {
+          id: 'regiones-cortes-etiquetas',
+          type: 'symbol',
+          source: 'regiones-cortes',
+          layout: {
+            visibility: 'none', // Oculto por defecto
+            'text-field': ['get', 'nombre'],
+            'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+            'text-size': 12,
+            'text-offset': [0, 2],
+            'text-anchor': 'top'
+          },
+          paint: {
+            'text-color': '#1f2937',
+            'text-halo-color': '#ffffff',
+            'text-halo-width': 2
+          }
+        },
+        {
+          id: 'regiones-fmo-puntos',
+          type: 'circle',
+          source: 'regiones-fmo',
+          layout: {
+            visibility: 'none' // Oculto por defecto, se muestra solo cuando Francisco Morazán está seleccionado
+          },
+          paint: {
+            'circle-radius': 8,
+            'circle-color': '#f59e0b', // Color por defecto (naranja)
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#ffffff'
+          }
+        },
+        {
+          id: 'regiones-fmo-etiquetas',
+          type: 'symbol',
+          source: 'regiones-fmo',
+          layout: {
+            visibility: 'none', // Oculto por defecto
+            'text-field': ['get', 'nombre'],
+            'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+            'text-size': 12,
+            'text-offset': [0, 2],
             'text-anchor': 'top'
           },
           paint: {
@@ -755,7 +1002,82 @@ const construirMapa = async () => {
         await cargarDatosDepartamento(departamentoId)
         actualizarColores()
         actualizarEtiquetas()
+        actualizarPuntosRegiones()
       }
+    })
+
+    // Click en puntos de región de Cortés
+    mapInstance.on('click', 'regiones-cortes-puntos', async (evento: MapLayerMouseEvent) => {
+      const feature = evento.features?.[0]
+      if (!feature) return
+
+      const propiedades = feature.properties as {
+        departamentoId?: number
+        regionId?: number
+        nombre?: string
+      }
+
+      const departamentoId = propiedades.departamentoId ?? 0
+      const regionId = propiedades.regionId ?? 0
+
+      if (departamentoId && regionId) {
+        regionSeleccionada.value = regionId
+        departamentoIdSeleccionado.value = departamentoId
+        // El nombre del departamento debe ser siempre "Cortés", no el nombre de la región
+        departamentoSeleccionado.value = {
+          id: departamentoId,
+          nombre: 'Cortés'
+        }
+
+        await cargarDatosDepartamento(departamentoId, regionId)
+        actualizarPuntosRegiones()
+      }
+    })
+
+    // Hover en puntos de región de Cortés
+    mapInstance.on('mouseenter', 'regiones-cortes-puntos', () => {
+      mapInstance.getCanvas().style.cursor = 'pointer'
+    })
+
+    mapInstance.on('mouseleave', 'regiones-cortes-puntos', () => {
+      mapInstance.getCanvas().style.cursor = ''
+    })
+
+    // Click en puntos de región de Francisco Morazán
+    mapInstance.on('click', 'regiones-fmo-puntos', async (evento: MapLayerMouseEvent) => {
+      const feature = evento.features?.[0]
+      if (!feature) return
+
+      const propiedades = feature.properties as {
+        departamentoId?: number
+        regionId?: number
+        nombre?: string
+      }
+
+      const departamentoId = propiedades.departamentoId ?? 0
+      const regionId = propiedades.regionId ?? 0
+
+      if (departamentoId && regionId) {
+        regionSeleccionada.value = regionId
+        departamentoIdSeleccionado.value = departamentoId
+        // El nombre del departamento debe ser siempre "Francisco Morazán", no el nombre de la región
+        departamentoSeleccionado.value = {
+          id: departamentoId,
+          nombre: 'Francisco Morazán'
+        }
+
+        await cargarDatosDepartamento(departamentoId, regionId)
+        actualizarPuntosRegiones()
+      }
+    })
+
+    // Hover en puntos de región de Francisco Morazán
+    mapInstance.on('mouseenter', 'regiones-fmo-puntos', () => {
+      mapInstance.getCanvas().style.cursor = 'pointer'
+    })
+
+    mapInstance.on('mouseleave', 'regiones-fmo-puntos', () => {
+      mapInstance.getCanvas().style.cursor = ''
     })
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Error desconocido al cargar el mapa'
@@ -799,10 +1121,14 @@ watch(datosDepartamentos, () => {
   actualizarColores()
 })
 
+watch(departamentoIdSeleccionado, () => {
+  actualizarPuntosRegiones()
+})
+
 watch(() => props.anio, async () => {
   if (departamentoSeleccionado.value) {
     datosMunicipales.value = null
-    await cargarDatosDepartamento(departamentoSeleccionado.value.id)
+    await cargarDatosDepartamento(departamentoSeleccionado.value.id, regionSeleccionada.value ?? undefined)
   }
   actualizarFuenteGeografica()
   actualizarColores()
@@ -845,7 +1171,7 @@ watch(() => props.anio, async () => {
           {{ departamentoSeleccionado.nombre }}
         </h3>
         <p class="text-xs text-gray-600 dark:text-gray-400">
-          Departamental de {{ departamentoSeleccionado.nombre }}
+          {{ regionSeleccionada ? (regionSeleccionada === 5 ? 'Cortés' : regionSeleccionada === 20 ? 'Metropolitana de San Pedro Sula' : regionSeleccionada === 8 ? 'Francisco Morazán' : regionSeleccionada === 19 ? 'Metropolitana del Distrito Central' : '') : `Departamental de ${departamentoSeleccionado.nombre}` }}
         </p>
       </div>
 

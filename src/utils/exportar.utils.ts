@@ -11,6 +11,20 @@ export interface MetaExportacion {
 // Re-exportar la función de formateo para mantener compatibilidad
 export const formatearCabecera = formatearCabeceraUtil;
 
+// Función para limpiar caracteres de control y codificaciones especiales
+const limpiarTexto = (texto: string): string => {
+  if (!texto) return texto;
+  
+  return String(texto)
+    // Eliminar codificaciones de caracteres de control como _x000d_, _x000a_, etc.
+    .replace(/_x[0-9a-fA-F]{4}_/g, ' ')
+    // Eliminar caracteres de control (carriage return, line feed, etc.)
+    .replace(/[\x00-\x1F\x7F]/g, ' ')
+    // Eliminar espacios múltiples y normalizar
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
 // Función para formatear celdas
 export const formatearCelda = (valor: unknown): string => {
   if (typeof valor === "number") {
@@ -19,7 +33,9 @@ export const formatearCelda = (valor: unknown): string => {
   if (valor === null || valor === undefined || valor === "") {
     return "-";
   }
-  return String(valor);
+  const texto = String(valor);
+  // Limpiar caracteres de control en el texto
+  return limpiarTexto(texto);
 };
 
 // Función para exportar a Excel (CSV)
@@ -81,11 +97,23 @@ export const exportarExcelXLSX = (
   const encabezados = cabeceras.map(cabecera => formatearCabecera(cabecera));
   datosExcel.push(encabezados);
 
+  // Detectar si alguna columna es "Concepto Ordenado" o "CONCEPTO_ORDENADO"
+  // Estas columnas deben mantenerse como texto, no como números
+  const esColumnaConceptoOrdenado = (index: number): boolean => {
+    const cabecera = cabeceras[index] || '';
+    const cabeceraLower = cabecera.toLowerCase();
+    return cabeceraLower.includes('concepto') && cabeceraLower.includes('ordenado');
+  };
+
   // Agregar filas de datos
   cuerpo.forEach(fila => {
-    const filaFormateada = fila.map(celda => {
+    const filaFormateada = fila.map((celda, index) => {
       const valorFormateado = formatearCelda(celda);
-      // Intentar convertir números para Excel
+      // Si es una columna de "Concepto Ordenado", mantener como texto
+      if (esColumnaConceptoOrdenado(index)) {
+        return valorFormateado; // Mantener como texto
+      }
+      // Para otras columnas, intentar convertir números para Excel
       const numero = parseFloat(String(celda));
       return !isNaN(numero) && isFinite(numero) ? numero : valorFormateado;
     });
@@ -189,7 +217,7 @@ const generarTablaDesdeDatos = (
     h2 { color: #000; margin: 0 0 6px 0; font-size: 18px; font-weight: bold; }
     h3 { color: #000; margin: 0 0 15px 0; font-size: 16px; font-weight: normal; }
     .meta { color: #000; font-size: 10px; margin-bottom: 10px; line-height: 1.4; text-align: center; }
-    .table-container { overflow-x: auto; width: 100%; border: 1px solid #d1d5db; border-radius: 4px; }
+    .table-container { overflow-x: auto; width: 100%; border: none; border-radius: 0; }
     table { 
       width: 100%; 
       border-collapse: collapse; 
@@ -220,7 +248,7 @@ const generarTablaDesdeDatos = (
       h2 { font-size: 16px; margin-bottom: 4px; }
       h3 { font-size: 14px; margin-bottom: 10px; }
       .meta { font-size: 9px; margin-bottom: 8px; }
-      .table-container { border: 1px solid #d1d5db; overflow: visible; }
+      .table-container { border: none; overflow: visible; }
       table { font-size: 7px; }
       th, td { padding: 2px 4px; font-size: 7px; border: 1px solid #999; }
       th { font-size: 6px; }
@@ -263,7 +291,7 @@ export const exportarPDF = (
     h2 { color: #000; margin: 0 0 6px 0; font-size: 18px; font-weight: bold; }
     h3 { color: #000; margin: 0 0 15px 0; font-size: 16px; font-weight: normal; }
     .meta { color: #000; font-size: 10px; margin-bottom: 10px; line-height: 1.4; text-align: center; }
-    .table-container { overflow-x: auto; width: 100%; border: 1px solid #d1d5db; border-radius: 4px; }
+    .table-container { overflow-x: auto; width: 100%; border: none; border-radius: 0; }
     table { 
       width: 100%; 
       border-collapse: collapse; 
@@ -294,7 +322,7 @@ export const exportarPDF = (
       h2 { font-size: 16px; margin-bottom: 4px; }
       h3 { font-size: 14px; margin-bottom: 10px; }
       .meta { font-size: 9px; margin-bottom: 8px; }
-      .table-container { border: 1px solid #d1d5db; overflow: visible; }
+      .table-container { border: none; overflow: visible; }
       table { font-size: 7px; }
       th, td { padding: 2px 4px; font-size: 7px; border: 1px solid #999; }
       th { font-size: 6px; }
