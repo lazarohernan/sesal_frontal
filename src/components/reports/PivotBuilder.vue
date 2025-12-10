@@ -1,21 +1,88 @@
 <template>
   <div class="grid gap-6 text-slate-900 dark:text-slate-100 min-w-0">
-    <!-- Selector de Año -->
+    <!-- Indicador de filtro de región forzado -->
+    <div 
+      v-if="esFiltroForzado" 
+      class="flex items-center gap-3 rounded-xl border-2 border-amber-400/50 bg-amber-50 dark:border-amber-600/50 dark:bg-amber-900/20 p-4 shadow-panel"
+    >
+      <div class="flex items-center justify-center w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/50">
+        <svg class="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+        </svg>
+      </div>
+      <div>
+        <p class="text-sm font-semibold text-amber-800 dark:text-amber-200">
+          Filtro de región activo
+        </p>
+        <p class="text-xs text-amber-700 dark:text-amber-300">
+          Los reportes están filtrados a: <strong>{{ nombreRegionForzada }}</strong>
+        </p>
+      </div>
+    </div>
+
+    <!-- Selector de Años (múltiple) -->
     <section class="flex items-center gap-4 rounded-xl border border-border bg-surface dark:border-border-dark dark:bg-surface-dark p-4 shadow-panel mb-6">
-      <div class="flex items-center gap-4">
+      <div class="flex items-center gap-4 flex-wrap">
         <label class="text-sm font-medium text-secondary dark:text-text-muted">
-          Año de consulta:
+          Años de consulta:
         </label>
-        <CompactSelect
+        <MultiSelect
           label=""
-          placeholder="Seleccionar año"
+          placeholder="Seleccionar años"
           :options="opcionesAnios"
-          :model-value="anioSeleccionado"
-          @update:model-value="onAnioSelectChange"
-          :disabled="cargandoAnios"
+          :model-value="aniosSeleccionados"
+          field="ANIOS"
+          :disabled="estado.cargando"
+          @update:model-value="onAniosChange"
         />
-        <span v-if="anioSeleccionado" class="text-xs text-slate-500 dark:text-slate-400">
-          Datos del año {{ anioSeleccionado }}
+        <span v-if="aniosSeleccionados.length > 0" class="text-xs text-slate-500 dark:text-slate-400">
+          <template v-if="aniosSeleccionados.length === 1">
+            Datos del año {{ aniosSeleccionados[0] }}
+          </template>
+          <template v-else>
+            {{ aniosSeleccionados.length }} años seleccionados
+          </template>
+        </span>
+        <div v-if="aniosSeleccionados.length > 5 && !estado.cargando" class="relative group">
+          <span class="text-xs text-amber-600 dark:text-amber-400 cursor-help">
+            ⚠️ Consultas con {{ aniosSeleccionados.length }} años pueden tardar más tiempo
+          </span>
+          <!-- Tooltip -->
+          <div class="absolute bottom-full left-0 mb-2 hidden w-64 rounded-lg bg-slate-900 p-3 text-xs text-white shadow-lg group-hover:block z-50">
+            <div class="flex items-start gap-2">
+              <span class="text-amber-400">⚠️</span>
+              <div>
+                <p class="font-medium mb-1">Tiempo estimado de carga:</p>
+                <p class="text-slate-300">
+                  {{ aniosSeleccionados.length === 6 ? '~30 segundos' : 
+                     aniosSeleccionados.length === 7 ? '~45 segundos' :
+                     aniosSeleccionados.length === 8 ? '~1 minuto' :
+                     aniosSeleccionados.length === 9 ? '~1 minuto 15 segundos' :
+                     aniosSeleccionados.length === 10 ? '~1 minuto 30 segundos' :
+                     aniosSeleccionados.length === 11 ? '~1 minuto 45 segundos' :
+                     aniosSeleccionados.length === 12 ? '~2 minutos' :
+                     aniosSeleccionados.length === 13 ? '~2 minutos 15 segundos' :
+                     aniosSeleccionados.length === 14 ? '~2 minutos 30 segundos' :
+                     aniosSeleccionados.length === 15 ? '~2 minutos 45 segundos' :
+                     aniosSeleccionados.length === 16 ? '~3 minutos' :
+                     aniosSeleccionados.length === 17 ? '~3 minutos 15 segundos' :
+                     aniosSeleccionados.length >= 18 ? '~3 minutos 30 segundos' : '' }}
+                </p>
+                <p class="text-xs text-slate-400 mt-2">El sistema procesará ~{{ aniosSeleccionados.length }} millón(es) de registros</p>
+              </div>
+            </div>
+            <!-- Flecha del tooltip -->
+            <div class="absolute top-full left-4 -mt-1">
+              <div class="border-4 border-transparent border-t-slate-900"></div>
+            </div>
+          </div>
+        </div>
+        <span v-if="estado.cargando" class="flex items-center gap-2 text-xs text-orange-600 dark:text-orange-400">
+          <svg class="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          Cargando... espera para cambiar años
         </span>
       </div>
     </section>
@@ -147,24 +214,44 @@
         :mensaje-progreso="estado.mensajeProgreso"
       />
     </section>
+
+    <!-- Modal de errores amigable -->
+    <ErrorModal
+      :error="errorModal"
+      :visible="mostrarErrorModal"
+      @cerrar="cerrarErrorModal"
+      @reintentar="reintentarDesdeModal"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import type { PivotCatalogo, PivotQueryPayload, PivotQueryResult } from "../../types/pivot";
-import { consultarPivotApi, obtenerCatalogoPivotApi, obtenerValoresDimensionApi } from "../../services/pivot";
+import { 
+  consultarPivotApi, 
+  obtenerCatalogoPivotApi, 
+  obtenerValoresDimensionApi,
+  cancelarConsultaPivot,
+  isAbortError,
+  type PivotError
+} from "../../services/pivot";
 import { buildDragData, parseDragData } from "../../utils/drag";
 import type { DragData } from "../../utils/drag";
 import type { PivotFilterState } from "../../types/pivot";
+import { debounce, DEBOUNCE_TIMES } from "../../utils/request.utils";
 import PivotDropZone from "./PivotDropZone.vue";
 import PivotPreview from "./PivotPreview.vue";
 import MultiSelect from "../common/MultiSelect.vue";
-import CompactSelect from "../common/CompactSelect.vue";
+import ErrorModal from "../common/ErrorModal.vue";
 import { useApiBase } from "../../composables/useApiBase";
+import { useRegionFilter } from "../../composables/useRegionFilter";
 
 const catalogo = reactive<PivotCatalogo>({ dimensiones: [], medidas: [], actualizadoEn: "" });
 const apiBase = useApiBase();
+
+// Filtro de región global (desde URL ?reg=X)
+const { regionForzada, esFiltroForzado, nombreRegionForzada } = useRegionFilter();
 
 const filtros = ref<string[]>([]);
 const columnas = ref<string[]>([]);
@@ -172,9 +259,9 @@ const filas = ref<string[]>([]);
 const valores = ref<string[]>(["TOTAL"]);
 const busqueda = ref("");
 
-// Variables para el selector de año
+// Variables para el selector de años (múltiple)
 const aniosDisponibles = ref<number[]>([]);
-const anioSeleccionado = ref<number>(2025);
+const aniosSeleccionados = ref<number[]>([2025]);
 const cargandoAnios = ref(false);
 
 const estado = reactive({
@@ -183,6 +270,20 @@ const estado = reactive({
   progreso: 0,
   mensajeProgreso: "Preparando consulta..."
 });
+
+// Estado para el modal de errores
+const errorModal = ref<PivotError | null>(null);
+const mostrarErrorModal = ref(false);
+
+const cerrarErrorModal = () => {
+  mostrarErrorModal.value = false;
+  errorModal.value = null;
+};
+
+const reintentarDesdeModal = () => {
+  cerrarErrorModal();
+  void consultarPivot();
+};
 
 let progresoResetTimeout: number | null = null;
 const esperar = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
@@ -212,6 +313,28 @@ const payloadConsulta = computed<PivotQueryPayload>(() => {
     field: dimensionId,
     values: filtrosInteractivos[dimensionId]?.seleccionados
   }));
+
+  // DEBUG: Log del filtro de región
+  console.log('[PivotBuilder] Región forzada:', regionForzada.value)
+
+  // Si hay filtro de región forzado por URL, agregarlo automáticamente
+  if (regionForzada.value) {
+    // Verificar si ya existe un filtro de REGION
+    const existeFiltroRegion = filtrosSeleccionados.some(f => f.field === 'REGION');
+    if (!existeFiltroRegion) {
+      // Agregar el filtro de región forzado
+      filtrosSeleccionados.push({
+        field: 'REGION',
+        values: [regionForzada.value]
+      });
+    } else {
+      // Si ya existe, sobrescribir con el valor forzado
+      const filtroRegion = filtrosSeleccionados.find(f => f.field === 'REGION');
+      if (filtroRegion) {
+        filtroRegion.values = [regionForzada.value];
+      }
+    }
+  }
 
   const filasSeleccionadas = [...filas.value];
   const columnasSeleccionadas = [...columnas.value];
@@ -264,7 +387,7 @@ const payloadConsulta = computed<PivotQueryPayload>(() => {
   });
 
   return {
-    year: anioSeleccionado.value,
+    years: aniosSeleccionados.value,
     filters: filtrosFinales,
     rows: filasSeleccionadas,
     columns: columnasSeleccionadas,
@@ -275,8 +398,17 @@ const payloadConsulta = computed<PivotQueryPayload>(() => {
 
 const dimensionesFiltradas = computed(() => {
   const texto = busqueda.value.trim().toLowerCase();
-  if (!texto) return catalogo.dimensiones;
-  return catalogo.dimensiones.filter(
+  let dimensiones = catalogo.dimensiones;
+  
+  // Si hay filtro de región forzado, ocultar la dimensión REGION del catálogo
+  if (esFiltroForzado.value) {
+    dimensiones = dimensiones.filter(
+      (dimension: any) => dimension.id !== 'REGION' && dimension.id !== 'region'
+    );
+  }
+  
+  if (!texto) return dimensiones;
+  return dimensiones.filter(
     (dimension: any) =>
       dimension.etiqueta.toLowerCase().includes(texto) || dimension.id.toLowerCase().includes(texto)
   );
@@ -291,7 +423,10 @@ const medidasFiltradas = computed(() => {
   );
 });
 
-const visibleFilters = computed(() => Object.values(filtrosInteractivos));
+// Filtros visibles: solo los que NO están bloqueados
+const visibleFilters = computed(() => 
+  Object.values(filtrosInteractivos).filter(filtro => !filtro.bloqueado)
+);
 
 // Función para convertir número de mes a nombre del mes
 const obtenerNombreMes = (numeroMes: number | string): string => {
@@ -331,12 +466,24 @@ const cargarOpcionesFiltro = async (field: string) => {
     // Para ESTABLECIMIENTO usar límite mayor (hay ~1753 establecimientos)
     const limiteRequerido = field === 'ESTABLECIMIENTO' ? 2000 : 200;
     
-    // Si es MUNICIPIO y hay REGION seleccionada, pasar el filtro de región
+    // Determinar el filtro de región a usar:
+    // 1. Si hay filtro forzado por URL, usar ese siempre
+    // 2. Si no, usar el seleccionado manualmente en filtrosInteractivos
     let filtroRegion: string | undefined = undefined;
-    if (field === 'MUNICIPIO' && filtrosInteractivos['REGION']?.seleccionados?.length) {
-      // Tomar el primer valor de región seleccionado
+    
+    // Prioridad 1: Filtro forzado por URL
+    if (regionForzada.value) {
+      filtroRegion = regionForzada.value;
+    }
+    // Prioridad 2: Filtro seleccionado manualmente
+    else if (filtrosInteractivos['REGION']?.seleccionados?.length) {
       const regionSeleccionada = filtrosInteractivos['REGION'].seleccionados[0];
       filtroRegion = String(regionSeleccionada);
+    }
+    
+    // Si es MUNICIPIO, aplicar el filtro de región
+    if (field === 'MUNICIPIO' && filtroRegion) {
+      console.log('[PivotBuilder] Cargando municipios filtrados por región:', filtroRegion);
     }
     
     // Si es ESTABLECIMIENTO, aplicar lógica de prioridad: Municipio > Región
@@ -347,11 +494,8 @@ const cargarOpcionesFiltro = async (field: string) => {
         const municipioSeleccionado = filtrosInteractivos['MUNICIPIO'].seleccionados[0];
         filtroMunicipio = String(municipioSeleccionado);
       }
-      // Prioridad 2: Si NO hay municipio pero SÍ hay REGION, filtrar por región
-      else if (filtrosInteractivos['REGION']?.seleccionados?.length) {
-        const regionSeleccionada = filtrosInteractivos['REGION'].seleccionados[0];
-        filtroRegion = String(regionSeleccionada);
-      }
+      // Prioridad 2: Si NO hay municipio pero SÍ hay filtro de región, filtrar por región
+      // (filtroRegion ya está establecido arriba con la prioridad correcta)
     }
     
     const respuesta = await obtenerValoresDimensionApi(field, undefined, limiteRequerido, apiBase.value, filtroRegion, filtroMunicipio);
@@ -486,9 +630,12 @@ const cargarAniosDisponibles = async () => {
       aniosDisponibles.value = [2025];
     }
     
-    // Si el año seleccionado no está en la lista, usar el primero disponible
-    if (!aniosDisponibles.value.includes(anioSeleccionado.value)) {
-      anioSeleccionado.value = aniosDisponibles.value[0] ?? 2025;
+    // Si ninguno de los años seleccionados está en la lista, usar el más reciente
+    const aniosValidos = aniosSeleccionados.value.filter(a => aniosDisponibles.value.includes(a));
+    if (aniosValidos.length === 0) {
+      aniosSeleccionados.value = [aniosDisponibles.value[0] ?? 2025];
+    } else {
+      aniosSeleccionados.value = aniosValidos;
     }
   } catch (error) {
     console.error('Error cargando años disponibles:', error);
@@ -498,19 +645,80 @@ const cargarAniosDisponibles = async () => {
   }
 };
 
-const onAnioChange = () => {
-  // Ejecutar consulta automáticamente cuando cambie el año
-  if (filas.value.length > 0 || columnas.value.length > 0 || valores.value.length > 0) {
-    consultarPivot();
-  }
-};
+// Nota: La consulta se ejecuta directamente en onAniosChange para evitar
+// llamadas redundantes y mantener el código más limpio
 
 const actualizarProgreso = (valor: number, mensaje: string) => {
   estado.progreso = Math.max(0, Math.min(100, Math.round(valor)));
   estado.mensajeProgreso = mensaje;
 };
 
-const consultarPivot = async () => {
+// Intervalo para progreso continuo durante la carga
+let progresoInterval: number | null = null;
+
+// Mensajes de progreso según el porcentaje - incluye info de años seleccionados
+const obtenerMensajeProgreso = (progreso: number): string => {
+  const numAnios = aniosSeleccionados.value.length;
+  const aniosTexto = numAnios === 1 
+    ? `año ${aniosSeleccionados.value[0]}` 
+    : `${numAnios} años`;
+  
+  const tiempoEstimado = numAnios > 5 ? " (esto puede tardar unos minutos)" : "";
+  
+  if (progreso < 10) return `Preparando consulta para ${aniosTexto}...`;
+  if (progreso < 25) return `Conectando a base de datos...`;
+  if (progreso < 50) return `Consultando ${aniosTexto}${tiempoEstimado}...`;
+  if (progreso < 70) return `Procesando ~${numAnios} millón(es) de registros...`;
+  if (progreso < 85) return "Agregando y calculando totales...";
+  if (progreso < 95) return "Generando tabla de resultados...";
+  return "Finalizando...";
+};
+
+// Inicia el progreso continuo que avanza gradualmente
+const iniciarProgresoContinuo = () => {
+  let progresoActual = 5;
+  // Velocidad base ajustada según cantidad de años
+  const numAnios = aniosSeleccionados.value.length;
+  const velocidadBase = numAnios > 5 ? 500 : numAnios > 3 ? 300 : 200; // ms entre incrementos
+  
+  // Limpiar intervalo anterior si existe
+  if (progresoInterval) {
+    window.clearInterval(progresoInterval);
+  }
+  
+  actualizarProgreso(progresoActual, obtenerMensajeProgreso(progresoActual));
+  
+  progresoInterval = window.setInterval(() => {
+    // El progreso avanza más lento conforme se acerca al 90%
+    // Nunca llega a 100% hasta que la consulta termine
+    // Ajustar velocidad según cantidad de años
+    const incremento = numAnios > 5 ? 0.3 : numAnios > 3 ? 0.5 : 1;
+    
+    if (progresoActual < 30) {
+      progresoActual += incremento * 2;
+    } else if (progresoActual < 60) {
+      progresoActual += incremento;
+    } else if (progresoActual < 80) {
+      progresoActual += incremento * 0.5;
+    } else if (progresoActual < 90) {
+      progresoActual += incremento * 0.2;
+    }
+    // No pasar de 90% hasta que termine
+    progresoActual = Math.min(progresoActual, 90);
+    actualizarProgreso(progresoActual, obtenerMensajeProgreso(progresoActual));
+  }, velocidadBase);
+};
+
+// Detiene el progreso continuo
+const detenerProgresoContinuo = () => {
+  if (progresoInterval) {
+    window.clearInterval(progresoInterval);
+    progresoInterval = null;
+  }
+};
+
+// Función interna de consulta (sin debounce)
+const ejecutarConsultaPivot = async () => {
   try {
     estado.cargando = true;
     estado.error = "";
@@ -519,35 +727,48 @@ const consultarPivot = async () => {
       progresoResetTimeout = null;
     }
 
-    actualizarProgreso(0, "Preparando consulta...");
-    await esperar(80);
+    // Iniciar progreso continuo
+    iniciarProgresoContinuo();
 
-    actualizarProgreso(15, "Validando filtros seleccionados...");
-    await esperar(120);
-
-    actualizarProgreso(30, "Consultando servicio de reportes...");
-
+    // Ejecutar la consulta real
     const respuesta = await consultarPivotApi(payloadConsulta.value, apiBase.value);
 
-    actualizarProgreso(70, "Procesando datos obtenidos...");
-    await esperar(120);
-
-    resultado.value = respuesta;
-    actualizarProgreso(90, "Aplicando formato...");
+    // Detener progreso continuo y completar
+    detenerProgresoContinuo();
+    
+    actualizarProgreso(95, "Renderizando resultados...");
     await esperar(100);
 
+    resultado.value = respuesta;
     actualizarProgreso(100, "Reporte generado correctamente.");
   } catch (error) {
-    estado.error = error instanceof Error ? error.message : "No se pudo ejecutar la consulta";
+    detenerProgresoContinuo();
+    // Ignorar errores de cancelación (el usuario inició otra consulta)
+    if (isAbortError(error)) {
+      return;
+    }
+    
+    // Verificar si es un error estructurado (PivotError)
+    if (error && typeof error === 'object' && 'tipo' in error) {
+      const pivotError = error as PivotError;
+      errorModal.value = pivotError;
+      mostrarErrorModal.value = true;
+      estado.error = ""; // No mostrar error en el preview, solo en el modal
+    } else {
+      estado.error = error instanceof Error ? error.message : "No se pudo ejecutar la consulta";
+    }
     actualizarProgreso(0, "No se pudo generar el reporte.");
   } finally {
     estado.cargando = false;
     progresoResetTimeout = window.setTimeout(() => {
       actualizarProgreso(0, "Preparando consulta...");
       progresoResetTimeout = null;
-    }, 400);
+    }, 1500); // Mantener mensaje de éxito visible más tiempo
   }
 };
+
+// Consulta con debounce para evitar múltiples llamadas rápidas
+const consultarPivot = debounce(ejecutarConsultaPivot, DEBOUNCE_TIMES.PIVOT_QUERY);
 
 const handleDragStart = (event: DragEvent, tipo: "dimension" | "measure", id: string) => {
   if (!event.dataTransfer) return;
@@ -651,6 +872,12 @@ const handleMoveToZone = ({ data, targetZone }: { data: DragData; targetZone: Zo
 };
 
 const removerFiltro = (id: string) => {
+  // No permitir remover filtros bloqueados (como REGION cuando hay filtro forzado)
+  if (filtrosInteractivos[id]?.bloqueado) {
+    console.log('[PivotBuilder] No se puede remover filtro bloqueado:', id);
+    return;
+  }
+  
   const index = filtros.value.indexOf(id);
   if (index > -1) {
     filtros.value.splice(index, 1);
@@ -659,9 +886,9 @@ const removerFiltro = (id: string) => {
 };
 
 const limpiarTodosLosFiltros = () => {
-  // Limpiar todas las selecciones de los filtros
+  // Limpiar todas las selecciones de los filtros (excepto los bloqueados)
   Object.keys(filtrosInteractivos).forEach((field) => {
-    if (filtrosInteractivos[field]) {
+    if (filtrosInteractivos[field] && !filtrosInteractivos[field].bloqueado) {
       filtrosInteractivos[field].seleccionados = [];
     }
   });
@@ -702,13 +929,24 @@ const opcionesAnios = computed(() => {
   }));
 });
 
-// Manejar cambio de año desde el selector compacto
-const onAnioSelectChange = (valor: string | number | null) => {
-  const nuevoAnio = valor ? Number(valor) : 2025;
-  if (nuevoAnio !== anioSeleccionado.value) {
-    anioSeleccionado.value = nuevoAnio;
-    onAnioChange();
+// Manejar cambio de años desde el MultiSelect
+const onAniosChange = (valores: Array<string | number>) => {
+  const nuevosAnios = valores
+    .map((v) => Number(v))
+    .filter((n) => Number.isFinite(n));
+
+  if (nuevosAnios.length > 0) {
+    // Ordenar años descendente (más reciente primero)
+    aniosSeleccionados.value = nuevosAnios.sort((a, b) => b - a);
+  } else {
+    // Si el usuario deselecciona todos los años, usar el más reciente disponible
+    const primerAnio = aniosDisponibles.value[0];
+    const anioReciente = primerAnio !== undefined ? primerAnio : 2025;
+    aniosSeleccionados.value = [anioReciente];
   }
+
+  // Ejecutar consulta automáticamente
+  void consultarPivot();
 };
 
 onMounted(async () => {
@@ -716,6 +954,29 @@ onMounted(async () => {
     cargarCatalogo(),
     cargarAniosDisponibles()
   ]);
+  
+  // Si hay filtro de región forzado, agregar REGION a filtros automáticamente
+  if (esFiltroForzado.value && regionForzada.value) {
+    console.log('[PivotBuilder] Agregando filtro de región forzado:', regionForzada.value, nombreRegionForzada.value);
+    
+    // Agregar REGION a la lista de filtros si no está ya
+    if (!filtros.value.includes('REGION')) {
+      filtros.value.push('REGION');
+    }
+    
+    // Configurar el filtro interactivo con el valor forzado y bloqueado
+    filtrosInteractivos['REGION'] = {
+      field: 'REGION',
+      label: 'Región',
+      options: [{
+        valor: regionForzada.value,
+        etiqueta: nombreRegionForzada.value || `Región ${regionForzada.value}`
+      }],
+      seleccionados: [regionForzada.value],
+      bloqueado: true // Marcar como bloqueado para no permitir cambios
+    };
+  }
+  
   await consultarPivot();
 });
 
@@ -723,5 +984,9 @@ onBeforeUnmount(() => {
   if (progresoResetTimeout) {
     window.clearTimeout(progresoResetTimeout);
   }
+  // Detener progreso continuo si está activo
+  detenerProgresoContinuo();
+  // Cancelar cualquier consulta pendiente al desmontar el componente
+  cancelarConsultaPivot();
 });
 </script>

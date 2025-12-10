@@ -43,10 +43,13 @@ export interface PivotFilterState {
   label: string;
   options: PivotFilterOption[];
   seleccionados: Array<string | number>;
+  /** Si es true, el filtro está bloqueado y no se puede modificar (ej: filtro de región forzado por URL) */
+  bloqueado?: boolean;
 }
 
 export interface PivotQueryPayload {
   year?: number;
+  years?: number[];
   filters?: PivotFilter[];
   rows?: string[];
   columns?: string[];

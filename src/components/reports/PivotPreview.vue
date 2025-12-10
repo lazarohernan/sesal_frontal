@@ -60,13 +60,12 @@
       </div>
 
       <!-- Botones de Exportación -->
+      <!-- Nota: No pasamos tablaHtml para que la exportación PDF use todos los datos, no solo la página actual -->
       <ExportarArchivo
         :cabeceras="cabeceras"
         :cuerpo="todasLasFilas"
         :totales="totales"
         :meta="meta"
-        :tabla-html="tablaHtml"
-        :ancho-tabla="tablaWidth"
       />
 
       <!-- Tabla de Datos -->
@@ -244,7 +243,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import type { PivotQueryResult } from "../../types/pivot";
 import ExportarArchivo from "./ExportarArchivo.vue";
 import { formatearCabecera } from "../../utils/formateo.utils";
@@ -260,9 +259,6 @@ interface Props {
 const props = defineProps<Props>();
 
 const tablaRef = ref<HTMLTableElement | null>(null);
-const tablaHtml = ref<string>("");
-const refrescoHtmlTimeout = ref<number | null>(null);
-const tablaWidth = ref<number>(0);
 
 const progresoNormalizado = computed(() => {
   const valor = props.progreso ?? 0;
@@ -421,14 +417,12 @@ const paginasVisibles = computed(() => {
 });
 
 // Resetear paginación cuando cambien los datos o el resultado completo
-watch(() => props.resultado, () => {
-  paginaActual.value = 1;
-}, { deep: true });
-
-// También resetear cuando cambien los datos directamente
-watch(() => datos.value, () => {
-  paginaActual.value = 1;
-});
+watch(() => props.resultado, (nuevoResultado, resultadoAnterior) => {
+  // Solo resetear si realmente cambió el contenido
+  if (nuevoResultado?.generadoEn !== resultadoAnterior?.generadoEn) {
+    paginaActual.value = 1;
+  }
+}, { deep: false });
 
 const totales = computed(() => {
   if (!cabeceras.value.length || !totalGeneral.value) return [] as unknown[];
@@ -497,41 +491,5 @@ const formatearCelda = (valor: unknown) => {
   return String(valor);
 };
 
-const actualizarTablaHtml = () => {
-  if (!tablaRef.value) {
-    tablaHtml.value = "";
-    tablaWidth.value = 0;
-    return;
-  }
-  const tablaClon = tablaRef.value.cloneNode(true) as HTMLTableElement;
-  const theadSticky = tablaClon.querySelector("thead");
-  if (theadSticky) {
-    (theadSticky as HTMLElement).style.position = "";
-    (theadSticky as HTMLElement).style.top = "";
-  }
-  tablaHtml.value = tablaClon.outerHTML;
-  tablaWidth.value = tablaRef.value.offsetWidth;
-};
-
-const programarActualizacionTabla = () => {
-  if (refrescoHtmlTimeout.value) {
-    window.clearTimeout(refrescoHtmlTimeout.value);
-  }
-  refrescoHtmlTimeout.value = window.setTimeout(actualizarTablaHtml, 50);
-};
-
-watch([cuerpo, totales, cabeceras], () => {
-  programarActualizacionTabla();
-});
-
-onMounted(() => {
-  programarActualizacionTabla();
-});
-
-onUnmounted(() => {
-  if (refrescoHtmlTimeout.value) {
-    window.clearTimeout(refrescoHtmlTimeout.value);
-  }
-});
 
 </script>

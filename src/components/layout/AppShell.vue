@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import EmbedCode from '../config/EmbedCode.vue'
+// EmbedCode (botón Compartir) removido - la configuración de URLs con parámetros de región
+// se maneja en el manual de instalación, no en la interfaz de usuario
 import DatabaseStatus from '../config/DatabaseStatus.vue'
 
 const isDark = ref(false)
@@ -77,8 +78,8 @@ const themeLabel = computed(() => (isDark.value ? 'Cambiar a modo claro' : 'Camb
         <!-- Estado de Base de Datos -->
         <DatabaseStatus />
         
-        <!-- Código de Embedding -->
-        <EmbedCode />
+        <!-- Botón Compartir removido - la configuración de URLs con parámetros de región
+             se maneja en el manual de instalación -->
 
         <button
           class="flex items-center gap-2 self-start rounded-full border border-border px-5 py-2 text-sm font-medium text-text-primary shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-base dark:border-border-dark dark:bg-surface-dark dark:text-text-inverted"

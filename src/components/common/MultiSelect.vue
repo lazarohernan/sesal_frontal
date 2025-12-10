@@ -8,8 +8,14 @@
     <button
       type="button"
       :id="idInterno"
-      @click="abierto = !abierto"
-      class="flex w-full items-center justify-between gap-2 rounded-lg border border-slate-300 bg-white dark:border-slate-600 dark:bg-slate-700 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 shadow-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-600 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+      :disabled="disabled"
+      @click="!disabled && (abierto = !abierto)"
+      :class="[
+        'flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm shadow-sm transition-colors focus:outline-none',
+        disabled 
+          ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500' 
+          : 'border-slate-300 bg-white text-slate-900 hover:bg-slate-50 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600'
+      ]"
     >
       <span class="truncate">
         {{ seleccionados.length ? `${seleccionados.length} seleccionado${seleccionados.length > 1 ? 's' : ''}` : 'Seleccionar...' }}
@@ -27,7 +33,7 @@
 
     <!-- Dropdown -->
     <div
-      v-if="abierto"
+      v-if="abierto && !disabled"
       class="absolute z-50 mt-1 w-full min-w-[300px] rounded-lg border border-slate-200 bg-white dark:border-slate-600 dark:bg-slate-800 shadow-lg"
     >
       <!-- Buscador -->
@@ -68,21 +74,14 @@
         </p>
       </div>
 
-      <!-- Botones de acción -->
-      <div v-if="seleccionados.length" class="border-t border-slate-200 dark:border-slate-700 p-2 flex gap-2">
+      <!-- Botón limpiar -->
+      <div v-if="seleccionados.length" class="border-t border-slate-200 dark:border-slate-700 p-2">
         <button
           type="button"
           @click="limpiar"
-          class="flex-1 rounded-md bg-slate-100 dark:bg-slate-700 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+          class="w-full rounded-md bg-slate-100 dark:bg-slate-700 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
         >
-          Limpiar
-        </button>
-        <button
-          type="button"
-          @click="abierto = false"
-          class="flex-1 rounded-md bg-orange-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-700 transition-colors"
-        >
-          Aplicar
+          Limpiar selección
         </button>
       </div>
     </div>
@@ -101,11 +100,13 @@ const props = withDefaults(
     modelValue: Array<string | number>;
     optionLabelGetter?: (valor: string | number) => string;
     field?: string; // Campo para identificar el tipo de dimensión
+    disabled?: boolean; // Deshabilitar el selector
   }>(),
   {
     placeholder: "Buscar opción",
     optionLabelGetter: undefined,
-    field: undefined
+    field: undefined,
+    disabled: false
   }
 );
 

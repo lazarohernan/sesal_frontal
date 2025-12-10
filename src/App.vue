@@ -7,6 +7,7 @@ import PivotBuilder from './components/reports/PivotBuilder.vue'
 import CircularTabs from './components/common/CircularTabs.vue'
 import ImageBanner from './components/common/ImageBanner.vue'
 import { provideApiBase } from './composables/useApiBase'
+import { provideRegionFilter } from './composables/useRegionFilter'
 import type { ResumenTablero } from './types/tablero.ts'
 
 // Detectar si está en modo embedded
@@ -21,7 +22,6 @@ interface WidgetConfig {
 }
 
 const widgetConfig = inject<WidgetConfig | undefined>('widgetConfig', undefined)
-const appRoot = ref<HTMLElement | null>(null)
 
 const esModoEmbed = computed(() => Boolean(widgetConfig?.isEmbedded))
 
@@ -73,8 +73,10 @@ const apiBase = computed(() => {
 
 provideApiBase(apiBase)
 
-type TarjetaId = 'regiones' | 'municipios' | 'unidades' | 'detalle'
+// Inicializar filtro de región desde URL (?reg=X)
+const { esFiltroForzado, nombreRegionForzada, inicializarDesdeURL } = provideRegionFilter()
 
+type TarjetaId = 'regiones' | 'municipios' | 'unidades' | 'detalle'
 
 interface TarjetaResumen {
   id: TarjetaId
@@ -131,6 +133,7 @@ const tabs = [
   { id: 'dashboard', label: 'Mapa' },
   { id: 'indicadores', label: 'Indicadores' },
   { id: 'reportes', label: 'Reportes' }
+  // { id: 'hospitales', label: 'Hospitales' } // Ocultado temporalmente
 ]
 
 const MapaHonduras = defineAsyncComponent(() =>
@@ -141,7 +144,9 @@ const GraficosDinamicos = defineAsyncComponent(() =>
   import('./components/dashboard/GraficosDinamicos.vue')
 )
 
-
+const MapaHonduras2 = defineAsyncComponent(() =>
+  import('./components/dashboard/MapaHonduras2.vue')
+)
 
 const actualizarTarjetas = (datos: ResumenTablero) => {
   // Determinar qué año mostrar en la descripción
@@ -239,18 +244,21 @@ const cargarResumen = async (anio?: number | null) => {
 
 
 // Watcher para recargar datos cuando cambie el año seleccionado
-watch(anioSeleccionado, (nuevoAnio) => {
+watch(anioSeleccionado, (nuevoAnio: number | null) => {
   void cargarResumen(nuevoAnio)
 })
 
 // Watcher para actualizar las métricas cuando cambie el año del mapa
-watch(anioMapa, (nuevoAnioMapa) => {
+watch(anioMapa, (nuevoAnioMapa: number | null) => {
   // Si el año es 2025, podría ser "Total" o el año 2025 específico
   // Por ahora, siempre pasamos el año. Para "Total" necesitaríamos otra señal
   void cargarResumen(nuevoAnioMapa)
 })
 
 onMounted(() => {
+  // Inicializar filtro de región desde URL antes de cargar datos
+  inicializarDesdeURL()
+  
   void cargarAniosDisponibles()
   void cargarResumen()
 
@@ -261,7 +269,7 @@ onMounted(() => {
 
 watch(
   () => widgetConfig?.theme,
-  (nuevoTema) => {
+  (nuevoTema: 'light' | 'dark' | undefined) => {
     if (esModoEmbed.value) {
       aplicarTemaGlobal(nuevoTema)
     }
@@ -273,9 +281,6 @@ onBeforeUnmount(() => {
     aplicarTemaGlobal(temaInicial)
   }
 })
-
-
-
 
 </script>
 
@@ -358,6 +363,20 @@ onBeforeUnmount(() => {
 
     <!-- Modo Normal: App completa -->
     <div v-else class="min-h-screen bg-background dark:bg-background-dark">
+      <!-- Banner de filtro de región activo -->
+      <div 
+        v-if="esFiltroForzado" 
+        class="bg-brand-base text-white px-4 py-2 text-center text-sm font-medium shadow-md"
+      >
+        <span class="inline-flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+          </svg>
+          Vista filtrada: <strong>{{ nombreRegionForzada }}</strong>
+        </span>
+      </div>
+
       <!-- Pestañas circulares en la parte superior -->
       <div class="flex justify-center py-6 px-6">
         <CircularTabs
@@ -578,6 +597,41 @@ onBeforeUnmount(() => {
             </div>
           </template>
         </Suspense>
+      </AppShell>
+
+      <!-- Pestaña de Hospitales -->
+      <AppShell v-if="pestañaActiva === 'hospitales'">
+        <section class="mt-8 flex flex-col gap-6 transition-colors duration-300">
+          <!-- Mapa -->
+          <Suspense>
+            <template #default>
+              <MapaHonduras2 />
+            </template>
+            <template #fallback>
+              <div class="flex flex-col gap-6 transition-colors duration-300">
+                <div class="h-[480px] rounded-card border border-border bg-surface animate-pulse dark:border-border-dark dark:bg-surface-dark"></div>
+              </div>
+            </template>
+          </Suspense>
+
+          <!-- Reportes y Exportación -->
+          <section class="flex flex-col gap-6 transition-colors duration-300">
+            <header class="flex flex-col gap-4 rounded-card border border-border bg-surface px-6 py-4 shadow-panel transition-colors duration-300 dark:border-border-dark dark:bg-surface-dark">
+              <div class="space-y-1">
+                <h2 class="text-2xl font-semibold text-primary transition-colors duration-300 dark:text-text-inverted">
+                  Reportes y Exportación
+                </h2>
+                <p class="text-sm text-text-secondary transition-colors duration-300 dark:text-text-muted">
+                  Análisis interactivo de datos y herramientas de exportación avanzadas
+                </p>
+              </div>
+            </header>
+
+            <section class="flex flex-col gap-4 rounded-card border border-border bg-surface px-6 py-4 shadow-panel transition-colors duration-300 dark:border-border-dark dark:bg-surface-dark">
+              <!-- Contenido limpio para adecuar después -->
+            </section>
+          </section>
+        </section>
       </AppShell>
 
       <!-- Footer común para todas las páginas -->

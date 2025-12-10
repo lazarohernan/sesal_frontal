@@ -4,6 +4,7 @@ import CompactSelect from '../common/CompactSelect.vue'
 import GraficoBarras from './GraficoBarras.vue'
 import GraficoIconos from './GraficoIconos.vue'
 import { usePivotQuery, type PivotFilter } from '../../composables/usePivotQuery'
+import { useRegionFilter } from '../../composables/useRegionFilter'
 
 // Props para el componente
 interface Props {
@@ -15,6 +16,9 @@ const props = defineProps<Props>()
 // Composable para consultas pivot
 const apiBaseRef = toRef(props, 'apiBase')
 const { cargando: cargandoConsulta, error: errorConsulta, resultado, progreso: progresoConsulta, ejecutarConsulta } = usePivotQuery(apiBaseRef)
+
+// Filtro de región global (desde URL ?reg=X)
+const { regionForzada, esFiltroForzado } = useRegionFilter()
 
 // Estados reactivos para los filtros
 const anioInicio = ref<number | null>(null)
@@ -162,7 +166,12 @@ const construirFiltros = (): PivotFilter[] => {
     }
   }
   
-  if (regionSeleccionada.value) {
+  // FILTRO DE REGIÓN: Priorizar el filtro forzado por URL sobre el seleccionado manualmente
+  if (regionForzada.value) {
+    // Si hay filtro forzado por URL, usar ese siempre
+    filtros.push({ field: 'REGION', values: [regionForzada.value] })
+  } else if (regionSeleccionada.value) {
+    // Si no hay filtro forzado, usar el seleccionado manualmente
     filtros.push({ field: 'REGION', values: [regionSeleccionada.value] })
   }
   
@@ -217,6 +226,10 @@ const determinarDimensionAgrupacion = (): string => {
 const ejecutarConsultaIndicadores = async () => {
   const filtros = construirFiltros()
   const dimensionAgrupacion = determinarDimensionAgrupacion()
+  
+  // DEBUG: Log de filtros aplicados
+  console.log('[GraficosDinamicos] Filtros aplicados:', JSON.stringify(filtros, null, 2))
+  console.log('[GraficosDinamicos] Región forzada:', regionForzada.value)
   
   // Preparar el payload base
   const payload: any = {
@@ -429,16 +442,30 @@ watch([anioInicio, anioFin, regionSeleccionada, conceptosSeleccionados], () => {
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
               <span>Región:</span>
+              <!-- Indicador de filtro bloqueado -->
+              <span v-if="esFiltroForzado" class="text-xs text-amber-600 dark:text-amber-400 font-semibold">(Fijo)</span>
             </label>
             <div class="relative min-w-[240px]">
+              <!-- Si hay filtro forzado, mostrar texto fijo en lugar del selector -->
+              <div 
+                v-if="esFiltroForzado"
+                class="flex items-center gap-2 rounded-lg border-2 border-amber-400/50 bg-amber-50 dark:border-amber-600/50 dark:bg-amber-900/20 px-4 py-2.5 text-sm font-medium text-amber-800 dark:text-amber-200"
+              >
+                <svg class="w-4 h-4 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                <span class="truncate">{{ regionesDisponibles.find(r => r.valor === regionForzada)?.etiqueta || `Región ${regionForzada}` }}</span>
+              </div>
+              <!-- Selector normal si no hay filtro forzado -->
               <CompactSelect
+                v-else
                 v-model="regionSeleccionada"
                 :options="opcionesRegiones"
                 :disabled="cargandoRegiones"
                 :loading="cargandoRegiones"
                 placeholder="Todas las regiones"
               />
-              <div v-if="cargandoRegiones" class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+              <div v-if="cargandoRegiones && !esFiltroForzado" class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
                 <div class="w-4 h-4 border-2 border-brand-base/30 border-t-brand-base rounded-full animate-spin"></div>
               </div>
             </div>

@@ -13,6 +13,7 @@ import type { FeatureCollection, Feature, Geometry } from 'geojson'
 import MapLibreWorker from 'maplibre-gl/dist/maplibre-gl-csp-worker?worker'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import type { DepartamentoMapa } from '../../types/tablero'
+import { useRegionFilter } from '../../composables/useRegionFilter'
 
 ;(maplibregl as typeof maplibregl & { workerClass?: typeof Worker }).workerClass =
   MapLibreWorker as unknown as typeof Worker
@@ -63,6 +64,52 @@ const departamentoSeleccionado = ref<DepartamentoSeleccionado | null>(null)
 const departamentoIdSeleccionado = ref<number | null>(null)
 const regionSeleccionada = ref<number | null>(null) // Para Cortés: región 5 o 20
 let mapa: maplibregl.Map | null = null
+
+// Filtro de región global (desde URL ?reg=X)
+const { regionForzada, esFiltroForzado, nombreRegionForzada } = useRegionFilter()
+
+// Mapeo de región a departamento (para resaltar en el mapa)
+// Regiones 1-18 corresponden directamente a departamentos 1-18
+// Región 19 (Metropolitana DC) está en departamento 8 (Francisco Morazán)
+// Región 20 (Metropolitana SPS) está en departamento 5 (Cortés)
+const regionADepartamento = (region: string | null): number | null => {
+  if (!region) return null
+  const regNum = parseInt(region, 10)
+  if (regNum >= 1 && regNum <= 18) return regNum
+  if (regNum === 19) return 8 // Francisco Morazán
+  if (regNum === 20) return 5 // Cortés
+  return null
+}
+
+// Nombres de departamentos por ID
+const nombresDepartamentos: Record<number, string> = {
+  1: 'Atlántida', 2: 'Colón', 3: 'Comayagua', 4: 'Copán', 5: 'Cortés',
+  6: 'Choluteca', 7: 'El Paraíso', 8: 'Francisco Morazán', 9: 'Gracias a Dios',
+  10: 'Intibucá', 11: 'Islas de la Bahía', 12: 'La Paz', 13: 'Lempira',
+  14: 'Ocotepeque', 15: 'Olancho', 16: 'Santa Bárbara', 17: 'Valle', 18: 'Yoro'
+}
+
+// Coordenadas centrales de cada departamento para zoom
+const coordenadasDepartamentos: Record<number, [number, number]> = {
+  1: [-86.8, 15.75],   // Atlántida
+  2: [-85.9, 15.65],   // Colón
+  3: [-87.65, 14.45],  // Comayagua
+  4: [-88.8, 14.85],   // Copán
+  5: [-87.95, 15.5],   // Cortés
+  6: [-87.15, 13.35],  // Choluteca
+  7: [-86.5, 14.0],    // El Paraíso
+  8: [-87.2, 14.3],    // Francisco Morazán
+  9: [-84.5, 15.2],    // Gracias a Dios
+  10: [-88.15, 14.35], // Intibucá
+  11: [-86.5, 16.4],   // Islas de la Bahía
+  12: [-87.85, 14.15], // La Paz
+  13: [-88.55, 14.55], // Lempira
+  14: [-89.15, 14.45], // Ocotepeque
+  15: [-86.0, 14.7],   // Olancho
+  16: [-88.25, 14.95], // Santa Bárbara
+  17: [-87.6, 13.35],  // Valle
+  18: [-87.45, 15.15]  // Yoro
+}
 const esModoOscuro = ref<boolean>(false)
 let observer: MutationObserver | null = null
 
@@ -580,6 +627,118 @@ const actualizarPuntosRegiones = () => {
   }
 }
 
+// Función para aplicar el filtro de región forzado al mapa
+const aplicarFiltroRegionForzado = async (mapInstance: maplibregl.Map) => {
+  if (!regionForzada.value) return
+  
+  const regNum = parseInt(regionForzada.value, 10)
+  const departamentoId = regionADepartamento(regionForzada.value)
+  
+  if (!departamentoId) return
+  
+  console.log(`[MapaHonduras] Aplicando filtro de región forzado: ${regNum} -> Departamento ${departamentoId}`)
+  
+  // Establecer el departamento seleccionado
+  departamentoIdSeleccionado.value = departamentoId
+  departamentoSeleccionado.value = {
+    id: departamentoId,
+    nombre: nombresDepartamentos[departamentoId] || `Departamento ${departamentoId}`
+  }
+  
+  // Si es región metropolitana (19 o 20), establecer también la región seleccionada
+  if (regNum === 19 || regNum === 20) {
+    regionSeleccionada.value = regNum
+  }
+  
+  // Obtener coordenadas para el zoom
+  let coordenadas = coordenadasDepartamentos[departamentoId]
+  
+  // Para regiones metropolitanas, usar coordenadas específicas
+  if (regNum === 19) {
+    coordenadas = COORDENADAS_REGION_19
+  } else if (regNum === 20) {
+    coordenadas = COORDENADAS_REGION_20
+  }
+  
+  // Hacer zoom al departamento/región
+  if (coordenadas) {
+    mapInstance.easeTo({
+      center: coordenadas,
+      zoom: 8.5, // Zoom más cercano para ver mejor la región
+      pitch: 0,
+      bearing: 0,
+      padding: { top: 50, bottom: 50, left: 50, right: 300 },
+      duration: 1500,
+      essential: true
+    })
+  }
+  
+  // Cargar datos del departamento/región
+  await cargarDatosDepartamento(departamentoId, regNum === 19 || regNum === 20 ? regNum : undefined)
+  
+  // Actualizar visualización
+  actualizarColores()
+  actualizarEtiquetas()
+  actualizarPuntosRegiones()
+  
+  // Mostrar SOLO la región forzada y ocultar todo lo demás
+  mostrarSoloRegionForzada(mapInstance, regNum, departamentoId)
+}
+
+// Función para mostrar SOLO la región forzada y ocultar todo lo demás
+const mostrarSoloRegionForzada = (mapInstance: maplibregl.Map, regionId: number, departamentoId: number) => {
+  // OCULTAR completamente los departamentos que no son de esta región
+  // Filtrar para mostrar solo el departamento de la región
+  mapInstance.setFilter('departamentos-fill', ['==', ['get', 'departamentoId'], departamentoId])
+  mapInstance.setFilter('departamentos-hover', ['==', ['get', 'departamentoId'], departamentoId])
+  mapInstance.setFilter('departamentos-borde', ['==', ['get', 'departamentoId'], departamentoId])
+  
+  // Ocultar países vecinos para una vista más limpia
+  if (mapInstance.getLayer('centroamerica-fill')) {
+    mapInstance.setLayoutProperty('centroamerica-fill', 'visibility', 'none')
+  }
+  if (mapInstance.getLayer('centroamerica-borde')) {
+    mapInstance.setLayoutProperty('centroamerica-borde', 'visibility', 'none')
+  }
+  
+  // Colorear el departamento visible
+  mapInstance.setPaintProperty('departamentos-fill', 'fill-color', '#0ea5e9')
+  mapInstance.setPaintProperty('departamentos-fill', 'fill-opacity', 0.9)
+  
+  // Ocultar TODOS los puntos de departamentos
+  mapInstance.setFilter('departamentos-puntos', ['==', ['get', 'departamentoId'], -1])
+  mapInstance.setFilter('departamentos-etiquetas', ['==', ['get', 'departamentoId'], -1])
+  
+  // Mostrar solo el punto de la región específica
+  if (regionId === 5 || regionId === 20) {
+    // Cortés: mostrar solo el punto de la región correspondiente
+    mapInstance.setLayoutProperty('regiones-cortes-puntos', 'visibility', 'visible')
+    mapInstance.setLayoutProperty('regiones-cortes-etiquetas', 'visibility', 'visible')
+    mapInstance.setFilter('regiones-cortes-puntos', ['==', ['get', 'regionId'], regionId])
+    mapInstance.setFilter('regiones-cortes-etiquetas', ['==', ['get', 'regionId'], regionId])
+    // Asegurar que FMO esté oculto
+    mapInstance.setLayoutProperty('regiones-fmo-puntos', 'visibility', 'none')
+    mapInstance.setLayoutProperty('regiones-fmo-etiquetas', 'visibility', 'none')
+  } else if (regionId === 8 || regionId === 19) {
+    // Francisco Morazán: mostrar solo el punto de la región correspondiente
+    mapInstance.setLayoutProperty('regiones-fmo-puntos', 'visibility', 'visible')
+    mapInstance.setLayoutProperty('regiones-fmo-etiquetas', 'visibility', 'visible')
+    mapInstance.setFilter('regiones-fmo-puntos', ['==', ['get', 'regionId'], regionId])
+    mapInstance.setFilter('regiones-fmo-etiquetas', ['==', ['get', 'regionId'], regionId])
+    // Asegurar que Cortés esté oculto
+    mapInstance.setLayoutProperty('regiones-cortes-puntos', 'visibility', 'none')
+    mapInstance.setLayoutProperty('regiones-cortes-etiquetas', 'visibility', 'none')
+  } else {
+    // Para regiones 1-18 (excepto 5 y 8), mostrar solo el punto del departamento
+    mapInstance.setFilter('departamentos-puntos', ['==', ['get', 'departamentoId'], departamentoId])
+    // Ocultar puntos de regiones metropolitanas
+    mapInstance.setLayoutProperty('regiones-cortes-puntos', 'visibility', 'none')
+    mapInstance.setLayoutProperty('regiones-cortes-etiquetas', 'visibility', 'none')
+    mapInstance.setLayoutProperty('regiones-fmo-puntos', 'visibility', 'none')
+    mapInstance.setLayoutProperty('regiones-fmo-etiquetas', 'visibility', 'none')
+  }
+}
+
 const cargarDatosDepartamento = async (departamentoId: number, regionId?: number) => {
   try {
     cargandoTotales.value = true
@@ -894,6 +1053,11 @@ const construirMapa = async () => {
       actualizarColores()
       actualizarFondoMapa()
       actualizarFuenteGeografica()
+      
+      // Si hay filtro de región forzado, aplicarlo automáticamente
+      if (esFiltroForzado.value && regionForzada.value) {
+        aplicarFiltroRegionForzado(mapInstance)
+      }
     })
 
     // Capturar el estado original cuando el mapa esté completamente estable
@@ -949,6 +1113,11 @@ const construirMapa = async () => {
     })
 
     mapInstance.on('click', 'departamentos-fill', async (evento: MapLayerMouseEvent) => {
+      // Si hay filtro de región forzado, ignorar clicks en otros departamentos
+      if (esFiltroForzado.value) {
+        return
+      }
+      
       const feature = evento.features?.[0]
       if (!feature) {
         departamentoSeleccionado.value = null
@@ -1008,6 +1177,9 @@ const construirMapa = async () => {
 
     // Click en puntos de región de Cortés
     mapInstance.on('click', 'regiones-cortes-puntos', async (evento: MapLayerMouseEvent) => {
+      // Si hay filtro de región forzado, ignorar clicks
+      if (esFiltroForzado.value) return
+      
       const feature = evento.features?.[0]
       if (!feature) return
 
@@ -1045,6 +1217,9 @@ const construirMapa = async () => {
 
     // Click en puntos de región de Francisco Morazán
     mapInstance.on('click', 'regiones-fmo-puntos', async (evento: MapLayerMouseEvent) => {
+      // Si hay filtro de región forzado, ignorar clicks
+      if (esFiltroForzado.value) return
+      
       const feature = evento.features?.[0]
       if (!feature) return
 
@@ -1137,9 +1312,14 @@ watch(() => props.anio, async () => {
 
 <template>
   <div
-    class="relative min-h-[420px] overflow-hidden rounded-card border border-border bg-surface shadow-panel transition-colors duration-300 dark:border-border-dark dark:bg-surface-dark"
+    class="relative overflow-hidden rounded-card border border-border bg-surface shadow-panel transition-colors duration-300 dark:border-border-dark dark:bg-surface-dark"
+    :class="esFiltroForzado ? 'min-h-[580px]' : 'min-h-[420px]'"
   >
-    <div ref="mapaContainer" class="h-[480px] w-full max-[840px]:h-[360px]"></div>
+    <div 
+      ref="mapaContainer" 
+      class="w-full transition-all duration-300"
+      :class="esFiltroForzado ? 'h-[620px] max-[840px]:h-[500px]' : 'h-[480px] max-[840px]:h-[360px]'"
+    ></div>
 
     <div
       v-if="cargando"
@@ -1196,8 +1376,21 @@ watch(() => props.anio, async () => {
     </aside>
 
 
+    <!-- Indicador de filtro de región forzado -->
+    <div 
+      v-if="esFiltroForzado" 
+      class="absolute top-4 left-4 z-10 flex items-center gap-2 rounded-lg border-2 border-amber-400/50 bg-amber-50/95 dark:border-amber-600/50 dark:bg-amber-900/90 px-3 py-2 shadow-lg backdrop-blur"
+    >
+      <svg class="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+      </svg>
+      <span class="text-xs font-semibold text-amber-800 dark:text-amber-200">
+        {{ nombreRegionForzada }}
+      </span>
+    </div>
+
     <!-- Chips de años -->
-    <div class="absolute top-4 left-4 right-4 flex flex-wrap gap-2 justify-center">
+    <div class="absolute top-4 left-4 right-4 flex flex-wrap gap-2 justify-center" :class="{ 'pl-48': esFiltroForzado }">
       <button
         v-for="item in aniosDisponibles"
         :key="item.etiqueta"
@@ -1213,8 +1406,8 @@ watch(() => props.anio, async () => {
       </button>
     </div>
 
-    <!-- Controles inferiores -->
-    <div class="absolute bottom-4 left-4 right-4 flex justify-center">
+    <!-- Controles inferiores - Ocultar cuando hay filtro forzado -->
+    <div v-if="!esFiltroForzado" class="absolute bottom-4 left-4 right-4 flex justify-center">
       <button
         @click="volverVistaGeneral"
         :disabled="!departamentoSeleccionado"
