@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 
 const currentYear = computed(() => new Date().getFullYear())
+const appVersion = import.meta.env.VITE_APP_VERSION ?? '0.0.0'
 </script>
 
 <template>
@@ -38,6 +39,9 @@ const currentYear = computed(() => new Date().getFullYear())
       <div class="mt-6 text-center">
         <p class="text-xs text-text-secondary transition-colors duration-300 dark:text-text-muted">
           © {{ currentYear }} - Todos los derechos reservados.
+        </p>
+        <p class="mt-1 text-xs text-text-muted transition-colors duration-300 dark:text-slate-500">
+          Versión {{ appVersion }}
         </p>
       </div>
     </div>
